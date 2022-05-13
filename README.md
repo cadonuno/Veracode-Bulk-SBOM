@@ -11,6 +11,7 @@ All SBOM json files will be saved to the target directory.
 ## How to use:
 - Package the application using Maven
 - Call the jar by passing the required parameters
+- Example call: java -jar **jar-name** -vi **veracode-id** -vk **veracode-key** -td **target-directory**
 
 ## Parameters:
 All parameters are mandatory

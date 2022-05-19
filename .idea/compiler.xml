@@ -7,8 +7,10 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="BulkCreateSBOM" />
-        <module name="Veracode-Bulk-SBOM" />
       </profile>
     </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="Veracode-Bulk-SBOM" target="11" />
+    </bytecodeTargetLevel>
   </component>
 </project>

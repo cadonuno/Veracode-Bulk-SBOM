@@ -3,6 +3,7 @@ This application will load all Application Profiles from the account and will ge
 All SBOM json files will be saved to the target directory.
 
 ## Requirements:
+- Java 8 installed
 - A Veracode account with the security lead role
 - An SCA subscription
 - API Credentials (ID and Key)

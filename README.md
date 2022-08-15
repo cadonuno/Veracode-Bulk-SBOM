@@ -1,7 +1,7 @@
 # Bulk SBOM generator:
-This application reads all application profiles or agent-based SCA projects and generates an SBOM for each.  
-- For Upload and Scan, all SBOM json files will be saved in **target directory**.  
-- For Agent-based, a directory will be created within the **target directory** for each workspace and within, for each project, a json file will be saved.
+This application allows for bulk SBOM generation. 
+- For Upload and Scan, an SBOM json will be saved inside **target directory** for each application profile found.  
+- For Agent-based, a directory will be created within the **target directory** for each workspace found and an SBOM json file saved for each project identified.
 
 ## Requirements:
 - Java 8 installed

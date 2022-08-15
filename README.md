@@ -1,5 +1,5 @@
 # Bulk SBOM generator:
-This application will load all Application Profiles from the account and will generate one SBOM for each. 
+This application reads all application profiles or agent-based SCA projects and generates an SBOM for each.
 All SBOM json files will be saved to the target directory.
 
 ## Requirements:
@@ -7,12 +7,14 @@ All SBOM json files will be saved to the target directory.
 - A Veracode account with the security lead role
 - An SCA subscription
 - API Credentials (ID and Key)
-- At least one application available to the user that has been scanned using SCA Upload and Scan
+- Either:
+  - One application available to the user that has been scanned using SCA Upload and Scan
+  - One project containing SCA agent-based scan results
 
 ## How to use:
 - Package the application using Maven
 - Call the jar by passing the required parameters
-- Example call: java -jar **jar-name** -vi **veracode-id** -vk **veracode-key** -td **target-directory**
+- Example call: java -jar **jar-name** -vi **veracode-id** -vk **veracode-key** -td **target-directory** -s **source**
 
 ## Parameters:
 All parameters are mandatory
@@ -22,3 +24,6 @@ All parameters are mandatory
   - --veracode_key or -vk
 - Target Directory
   - --target_directory or -td
+- SBOM Source
+  - --source or -s
+  - Agent-based or Upload and Scan

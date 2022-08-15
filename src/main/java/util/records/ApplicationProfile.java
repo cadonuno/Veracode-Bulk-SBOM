@@ -1,6 +1,6 @@
-package util;
+package util.records;
 
-public class ApplicationProfile {
+public final class ApplicationProfile {
     private final String applicationId;
     private final String applicationName;
 

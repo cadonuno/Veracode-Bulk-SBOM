@@ -4,49 +4,138 @@ import org.apache.sling.commons.json.JSONException;
 import org.apache.sling.commons.json.JSONObject;
 import org.apache.tinkerpop.shaded.jackson.databind.ObjectMapper;
 import org.apache.tinkerpop.shaded.jackson.databind.SerializationFeature;
-import util.ApplicationProfile;
+import util.executionparameters.PlatformInstanceEnum;
+import util.records.ApplicationProfile;
 import util.HmacRequestSigner;
 import util.Logger;
 import util.executionparameters.ApiCredentials;
 import util.executionparameters.ExecutionParameters;
+import util.executionparameters.SbomSourceEnum;
+import util.records.Project;
+import util.records.Workspace;
 
 import javax.net.ssl.HttpsURLConnection;
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class ApiCaller {
-    private static final String URL_BASE = "api.veracode.com";
+    private static final String APIS_BASE_URL = "api.veracode.";
     private static final String APPLICATIONS_API_URL = "/appsec/v1/applications/";
+    private static final String WORKSPACES_API_URL = "/srcclr/v3/workspaces/";
+    private static final String PROJECTS_API_URL_END = "/projects/";
     private static final String GET_REQUEST = "GET";
-    public static final String SRCCLR_SBOM_URL_BASE = "/srcclr/sbom/v1/targets/";
-    public static final String SRCCLR_SBOM_URL_END = "/cyclonedx?type=application";
+    public static final String SBOM_API_URL_BASE = "/srcclr/sbom/v1/targets/";
+    public static final String UPLOAD_AND_SCAN_SBOM_URL_END = "/cyclonedx?type=application";
+    public static final String AGENT_BASED_SBOM_URL_END = "/cyclonedx?type=agent";
+    private static String instanceUrl;
 
     public static void handleApiCalls(ExecutionParameters executionParameters) {
+        instanceUrl = APIS_BASE_URL + executionParameters.getPlatformInstance().getTopLevelDomain();
+        Logger.log("Running on " + executionParameters.getPlatformInstance().getAsString() + " instance");
+        if (executionParameters.getSbomSource() == SbomSourceEnum.AgentBasedScan) {
+            getSbomFromAgentBasedScans(executionParameters);
+        } else {
+            getSbomFromUploadAndScan(executionParameters);
+        }
+    }
+
+    private static boolean isEuInstance(ExecutionParameters executionParameters) {
+        return executionParameters.getPlatformInstance() == PlatformInstanceEnum.Eu;
+    }
+
+    private static void getSbomFromAgentBasedScans(ExecutionParameters executionParameters) {
+        Logger.log("Obtaining list of workspaces");
+        List<Workspace> allWorkspaces = getAllWorkspaces(executionParameters.getApiCredentials());
+        addProjectsToWorkspaces(executionParameters.getApiCredentials(), allWorkspaces);
+        allWorkspaces = allWorkspaces.stream()
+                .filter(workspace -> !workspace.getProjects().isEmpty())
+                .collect(Collectors.toList());
+        Logger.log("Found " + allWorkspaces.size() + " workspaces with projects to read");
+        for (Workspace workspace : allWorkspaces) {
+            Logger.log("  Obtaining SBOM for Workspace: " + workspace.getName());
+            workspace.getProjects().forEach(project ->
+                    saveAgentBasedSBOM(executionParameters, project));
+        }
+        Logger.log("Finished obtaining SBOM for " + allWorkspaces.size() + " workspaces");
+    }
+
+    private static List<Workspace> getAllWorkspaces(ApiCredentials apiCredentials) {
+        return runApi(WORKSPACES_API_URL, GET_REQUEST, null, apiCredentials)
+                .flatMap(JsonHandler::getWorkspacesFromPayload)
+                .orElse(Collections.emptyList());
+    }
+
+    private static void addProjectsToWorkspaces(ApiCredentials apiCredentials, List<Workspace> allWorkspaces) {
+        allWorkspaces.forEach(workspace ->
+                workspace.getProjects().addAll(
+                        getAllProjectsFromWorkspace(apiCredentials, workspace)));
+    }
+
+    private static List<Project> getAllProjectsFromWorkspace(ApiCredentials apiCredentials, Workspace workspace) {
+        return runApi(WORKSPACES_API_URL + workspace.getGuid() + PROJECTS_API_URL_END, GET_REQUEST, null, apiCredentials)
+                .flatMap((JSONObject apiCallResult) -> JsonHandler.getProjectsFromPayload(apiCallResult, workspace))
+                .orElse(Collections.emptyList());
+    }
+
+    private static void getSbomFromUploadAndScan(ExecutionParameters executionParameters) {
         Logger.log("Obtaining list of application profiles");
         List<ApplicationProfile> allApplications = getAllApplicationProfiles(executionParameters.getApiCredentials());
-        Logger.log("Obtaining SBOM for " + allApplications.size() + " applications");
+        Logger.log("Found " + allApplications.size() + " applications");
         for (ApplicationProfile applicationProfile : allApplications) {
-            saveSBOM(executionParameters, applicationProfile);
+            Logger.log("  Obtaining SBOM for application: " + applicationProfile.getApplicationName());
+            saveUploadAndScanSBOM(executionParameters, applicationProfile);
         }
         Logger.log("Finished obtaining SBOM for " + allApplications.size() + " applications");
     }
 
-    private static void saveSBOM(ExecutionParameters executionParameters, ApplicationProfile applicationProfile) {
-        runApi(SRCCLR_SBOM_URL_BASE +
-                        applicationProfile.getApplicationId() + SRCCLR_SBOM_URL_END,
+    private static void saveUploadAndScanSBOM(ExecutionParameters executionParameters, ApplicationProfile applicationProfile) {
+        runApi(SBOM_API_URL_BASE +
+                        applicationProfile.getApplicationId() + UPLOAD_AND_SCAN_SBOM_URL_END,
                 GET_REQUEST, null, executionParameters.getApiCredentials())
-                .ifPresent(jsonPayload -> saveFile(executionParameters.getTargetDirectory(),
+                .ifPresent(jsonPayload -> saveApplicationProfileFile(executionParameters.getTargetDirectory(),
                         jsonPayload, applicationProfile));
     }
 
-    private static void saveFile(String targetDirectory, JSONObject jsonPayload,
-                                 ApplicationProfile applicationProfile) {
+    private static void saveAgentBasedSBOM(ExecutionParameters executionParameters, Project project) {
+        Logger.log("    Obtaining SBOM for Project: " + project.getName());
+        runApi(SBOM_API_URL_BASE +
+                        project.getGuid() + AGENT_BASED_SBOM_URL_END,
+                GET_REQUEST, null, executionParameters.getApiCredentials())
+                .ifPresent(jsonPayload ->
+                        saveProjectFile(new File(executionParameters.getTargetDirectory(),
+                                        escapeForFileName(project.getWorkspace().getName())),
+                                jsonPayload, project));
+    }
+
+    private static void saveProjectFile(File directory, JSONObject jsonPayload, Project project) {
+        if (!directory.exists()) {
+            directory.mkdirs();
+        }
+        File fileToSave = new File(directory, escapeForFileName(project.getName()) + ".json");
+        saveJsonToFile(jsonPayload, fileToSave);
+    }
+
+    private static void saveApplicationProfileFile(String targetDirectory, JSONObject jsonPayload,
+                                                   ApplicationProfile applicationProfile) {
         File fileToSave = new File(targetDirectory,
-                applicationProfile.getApplicationName() + ".json");
+                escapeForFileName(applicationProfile.getApplicationName()) + ".json");
+        saveJsonToFile(jsonPayload, fileToSave);
+    }
+
+    private static void saveJsonToFile(JSONObject jsonPayload, File fileToSave) {
         if (fileToSave.exists()) {
             fileToSave.delete();
         }
@@ -76,12 +165,13 @@ public class ApiCaller {
 
     private static Optional<JSONObject> runApi(String apiUrl, String requestType,
                                                String jsonParameters, ApiCredentials apiCredentials) {
+        HttpsURLConnection connection = null;
         try {
-            final URL applicationsApiUrl = new URL("https://" + URL_BASE + apiUrl);
+            final URL applicationsApiUrl = new URL("https://" + instanceUrl + apiUrl);
             final String authorizationHeader =
                     HmacRequestSigner.getVeracodeAuthorizationHeader(apiCredentials, applicationsApiUrl, requestType);
 
-            final HttpsURLConnection connection = (HttpsURLConnection) applicationsApiUrl.openConnection();
+            connection = (HttpsURLConnection) applicationsApiUrl.openConnection();
             connection.setRequestMethod(requestType);
             connection.setRequestProperty("Authorization", authorizationHeader);
 
@@ -98,8 +188,8 @@ public class ApiCaller {
                 return Optional.of(readResponse(responseInputStream));
             }
         } catch (InvalidKeyException | NoSuchAlgorithmException | IllegalStateException
-                | IOException | JSONException e) {
-            Logger.log("Unable to run API at: " + apiUrl + "\nWith parameters: " + jsonParameters);
+                 | IOException | JSONException e) {
+            Logger.log(" ** Unable to run API at: " + apiUrl + "\nWith parameters: " + jsonParameters);
         }
         return Optional.empty();
     }
@@ -116,5 +206,9 @@ public class ApiCaller {
         }
         outputStream.flush();
         return new JSONObject(outputStream.toString());
+    }
+
+    private static String escapeForFileName(String name) {
+        return name.replaceAll("\\W+", "-");
     }
 }

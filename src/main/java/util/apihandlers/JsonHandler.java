@@ -55,6 +55,14 @@ public class JsonHandler {
                 .orElse("");
     }
 
+    public static int getLastPageFromJson(JSONObject baseNode) {
+        return tryGetElementFromJsonObject(baseNode, "page")
+                .filter(result -> result instanceof JSONObject)
+                .map(JsonHandler::mapToJsonObject)
+                .flatMap(result -> tryGetElementAsInt(result, "total_pages"))
+                .orElse(0);
+    }
+
     public static Optional<List<Workspace>> getWorkspacesFromPayload(JSONObject apiCallResult) {
         return Optional.of(apiCallResult)
                 .flatMap(JsonHandler::getEmbeddedNode)
@@ -125,6 +133,12 @@ public class JsonHandler {
         return tryGetElementFromJsonObject(jsonObject, elementToGet)
                 .filter(result -> result instanceof String)
                 .map(result -> (String) result);
+    }
+
+    private static Optional<Integer> tryGetElementAsInt(JSONObject jsonObject, String elementToGet) {
+        return tryGetElementFromJsonObject(jsonObject, elementToGet)
+                .filter(result -> result instanceof Integer)
+                .map(result -> (Integer) result);
     }
 
     private static Optional<JSONObject> tryGetElementAtJsonArrayIndex(JSONArray allApplications, int currentIndex) {

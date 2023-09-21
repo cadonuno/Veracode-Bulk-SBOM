@@ -11,7 +11,7 @@ public class ExecutionParameters {
     private final String targetDirectory;
 
     protected ExecutionParameters(ApiCredentials apiCredentials, String targetDirectory,
-                                  String sbomSourceAsString, PlatformInstanceEnum platformInstance) {
+                                  String sbomSourceAsString) {
         if (targetDirectory == null || targetDirectory.isEmpty()) {
             throw new IllegalArgumentException("Target Directory argument is mandatory (--target_directory, -td)");
         }
@@ -23,7 +23,7 @@ public class ExecutionParameters {
             throw new IllegalStateException("'" + sbomSourceAsString + "' is not a valid SBOM source, allowed values are: \n" +
                     SbomSourceEnum.getValidParameterValues());
         }
-        this.platformInstance = platformInstance;
+        this.platformInstance = apiCredentials.getPlatformInstance();
         this.apiCredentials = apiCredentials;
         this.targetDirectory = targetDirectory;
     }
@@ -35,14 +35,12 @@ public class ExecutionParameters {
 
     private static ExecutionParameters parseParameters(
             ParameterParser parameterParser) {
-        ApiCredentials apiCredentials = new ApiCredentials(
-                parameterParser.getParameterAsString("--veracode_id", "-vi"),
-                parameterParser.getParameterAsString("--veracode_key", "-vk"));
         return new ExecutionParameters(
-                apiCredentials,
+                new ApiCredentials(
+                        parameterParser.getParameterAsString("--veracode_id", "-vi"),
+                        parameterParser.getParameterAsString("--veracode_key", "-vk")),
                 parameterParser.getParameterAsString("--target_directory", "-td"),
-                parameterParser.getParameterAsString("--source", "-s"),
-                apiCredentials.getPlatformInstance());
+                parameterParser.getParameterAsString("--source", "-s"));
     }
 
     public ApiCredentials getApiCredentials() {

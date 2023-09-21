@@ -5,7 +5,7 @@ This application allows for bulk SBOM generation.
 
 ## Requirements:
 - Java 8 installed
-- A Veracode account with the security lead role
+- A Veracode account with access to the SBOM functionality
 - An SCA subscription
 - API Credentials (ID and Key)
 - Either:

@@ -30,7 +30,7 @@ public final class Workspace {
     public boolean equals(Object obj) {
         if (obj == this) return true;
         if (obj == null || obj.getClass() != this.getClass()) return false;
-        var that = (Workspace) obj;
+        Workspace that = (Workspace) obj;
         return Objects.equals(this.guid, that.guid) &&
                 Objects.equals(this.name, that.name) &&
                 Objects.equals(this.projects, that.projects);
